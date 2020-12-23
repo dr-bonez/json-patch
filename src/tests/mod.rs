@@ -17,11 +17,11 @@ fn parse_from_value() {
         patch,
         Patch(vec![
             Add(AddOperation {
-                path: String::from("/a/b"),
+                path: "/a/b".parse().unwrap(),
                 value: Value::from(1),
             }),
             Remove(RemoveOperation {
-                path: String::from("/c"),
+                path: "/c".parse().unwrap(),
             }),
         ])
     );
@@ -43,11 +43,11 @@ fn parse_from_string() {
         patch,
         Patch(vec![
             Add(AddOperation {
-                path: String::from("/a/b"),
+                path: "/a/b".parse().unwrap(),
                 value: Value::from(1),
             }),
             Remove(RemoveOperation {
-                path: String::from("/c"),
+                path: "/c".parse().unwrap()
             }),
         ])
     );

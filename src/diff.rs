@@ -1,7 +1,8 @@
+use json_ptr::JsonPointer;
 use serde_json::Value;
 
 struct PatchDiffer {
-    path: String,
+    path: JsonPointer<String>,
     patch: super::Patch,
     shift: usize,
 }
@@ -9,7 +10,7 @@ struct PatchDiffer {
 impl PatchDiffer {
     fn new() -> Self {
         Self {
-            path: "/".to_string(),
+            path: "".parse().unwrap(),
             patch: super::Patch(Vec::new()),
             shift: 0,
         }
@@ -18,22 +19,14 @@ impl PatchDiffer {
 
 impl<'a> treediff::Delegate<'a, treediff::value::Key, Value> for PatchDiffer {
     fn push(&mut self, key: &treediff::value::Key) {
-        use std::fmt::Write;
-        if self.path.len() != 1 {
-            self.path.push('/');
-        }
         match *key {
-            treediff::value::Key::Index(idx) => write!(self.path, "{}", idx - self.shift).unwrap(),
-            treediff::value::Key::String(ref key) => append_path(&mut self.path, key),
+            treediff::value::Key::Index(idx) => self.path.push_end_idx(idx - self.shift),
+            treediff::value::Key::String(ref key) => self.path.push_end(key),
         }
     }
 
     fn pop(&mut self) {
-        let mut pos = self.path.rfind('/').unwrap_or(0);
-        if pos == 0 {
-            pos = 1;
-        }
-        self.path.truncate(pos);
+        self.path.pop_end();
         self.shift = 0;
     }
 
@@ -71,19 +64,6 @@ impl<'a> treediff::Delegate<'a, treediff::value::Key, Value> for PatchDiffer {
                 path: self.path.clone(),
                 value: new.clone(),
             }));
-    }
-}
-
-fn append_path(path: &mut String, key: &str) {
-    path.reserve(key.len());
-    for ch in key.chars() {
-        if ch == '~' {
-            *path += "~0";
-        } else if ch == '/' {
-            *path += "~1";
-        } else {
-            path.push(ch);
-        }
     }
 }
 
@@ -151,7 +131,7 @@ mod tests {
         assert_eq!(
             p,
             serde_json::from_value(json!([
-                { "op": "replace", "path": "/", "value": null },
+                { "op": "replace", "path": "", "value": null },
             ]))
             .unwrap()
         );
@@ -164,7 +144,7 @@ mod tests {
         assert_eq!(
             p,
             serde_json::from_value(json!([
-                { "op": "replace", "path": "/", "value": { "title": "Hello!" } },
+                { "op": "replace", "path": "", "value": { "title": "Hello!" } },
             ]))
             .unwrap()
         );

@@ -86,6 +86,7 @@
 #[cfg_attr(test, macro_use)]
 extern crate serde_json;
 
+use json_ptr::JsonPointer;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::error::Error;
@@ -100,7 +101,7 @@ pub struct Patch(pub Vec<PatchOperation>);
 pub struct AddOperation {
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// within the target document where the operation is performed.
-    pub path: String,
+    pub path: JsonPointer<String>,
     /// Value to add to the target location.
     pub value: Value,
 }
@@ -110,7 +111,7 @@ pub struct AddOperation {
 pub struct RemoveOperation {
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// within the target document where the operation is performed.
-    pub path: String,
+    pub path: JsonPointer<String>,
 }
 
 /// JSON Patch 'replace' operation representation
@@ -118,7 +119,7 @@ pub struct RemoveOperation {
 pub struct ReplaceOperation {
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// within the target document where the operation is performed.
-    pub path: String,
+    pub path: JsonPointer<String>,
     /// Value to replace with.
     pub value: Value,
 }
@@ -128,10 +129,10 @@ pub struct ReplaceOperation {
 pub struct MoveOperation {
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// to move value from.
-    pub from: String,
+    pub from: JsonPointer<String>,
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// within the target document where the operation is performed.
-    pub path: String,
+    pub path: JsonPointer<String>,
 }
 
 /// JSON Patch 'copy' operation representation
@@ -139,10 +140,10 @@ pub struct MoveOperation {
 pub struct CopyOperation {
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// to copy value from.
-    pub from: String,
+    pub from: JsonPointer<String>,
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// within the target document where the operation is performed.
-    pub path: String,
+    pub path: JsonPointer<String>,
 }
 
 /// JSON Patch 'test' operation representation
@@ -150,7 +151,7 @@ pub struct CopyOperation {
 pub struct TestOperation {
     /// JSON-Pointer value [RFC6901](https://tools.ietf.org/html/rfc6901) that references a location
     /// within the target document where the operation is performed.
-    pub path: String,
+    pub path: JsonPointer<String>,
     /// Value to test against.
     pub value: Value,
 }
@@ -184,111 +185,77 @@ pub enum PatchError {
     TestFailed,
 }
 
-impl Error for PatchError {
-    fn description(&self) -> &str {
-        match *self {
-            PatchError::InvalidPointer => "invalid pointer",
-            PatchError::TestFailed => "test failed",
-        }
-    }
-}
+impl Error for PatchError {}
 
 impl fmt::Display for PatchError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        self.description().fmt(fmt)
+        match *self {
+            PatchError::InvalidPointer => write!(fmt, "invalid pointer"),
+            PatchError::TestFailed => write!(fmt, "test failed"),
+        }
     }
 }
 
-fn parse_index(str: &str, len: usize) -> Result<usize, PatchError> {
-    // RFC 6901 prohibits leading zeroes in index
-    if str.starts_with('0') && str.len() != 1 {
-        return Err(PatchError::InvalidPointer);
-    }
-    match str.parse::<usize>() {
-        Ok(idx) if idx < len => Ok(idx),
-        _ => Err(PatchError::InvalidPointer),
-    }
+fn add<S: AsRef<str>>(
+    doc: &mut Value,
+    path: &JsonPointer<S>,
+    value: Value,
+) -> Result<Option<Value>, PatchError> {
+    dbg!(path.iter().collect::<Vec<_>>());
+    path.insert(doc, value, false)
+        .map_err(|_| PatchError::InvalidPointer)
 }
 
-fn split_pointer(pointer: &str) -> Result<(&str, String), PatchError> {
-    pointer
-        .rfind('/')
+fn remove<S: AsRef<str>>(
+    doc: &mut Value,
+    path: &JsonPointer<S>,
+    allow_last: bool,
+) -> Result<Value, PatchError> {
+    path.remove(doc, allow_last)
         .ok_or(PatchError::InvalidPointer)
-        .map(|idx| {
-            (
-                &pointer[0..idx],
-                pointer[idx + 1..].replace("~1", "/").replace("~0", "~"),
-            )
-        })
 }
 
-fn add(doc: &mut Value, path: &str, value: Value) -> Result<Option<Value>, PatchError> {
-    if path == "" {
-        return Ok(Some(mem::replace(doc, value)));
-    }
-
-    let (parent, last) = split_pointer(path)?;
-    let parent = doc.pointer_mut(parent).ok_or(PatchError::InvalidPointer)?;
-
-    match *parent {
-        Value::Object(ref mut obj) => Ok(obj.insert(last, value)),
-        Value::Array(ref mut arr) if last == "-" => {
-            arr.push(value);
-            Ok(None)
-        }
-        Value::Array(ref mut arr) => {
-            let idx = parse_index(last.as_str(), arr.len() + 1)?;
-            arr.insert(idx, value);
-            Ok(None)
-        }
-        _ => Err(PatchError::InvalidPointer),
-    }
-}
-
-fn remove(doc: &mut Value, path: &str, allow_last: bool) -> Result<Value, PatchError> {
-    let (parent, last) = split_pointer(path)?;
-    let parent = doc.pointer_mut(parent).ok_or(PatchError::InvalidPointer)?;
-
-    match *parent {
-        Value::Object(ref mut obj) => match obj.remove(last.as_str()) {
-            None => Err(PatchError::InvalidPointer),
-            Some(val) => Ok(val),
-        },
-        Value::Array(ref mut arr) if allow_last && last == "-" => Ok(arr.pop().unwrap()),
-        Value::Array(ref mut arr) => {
-            let idx = parse_index(last.as_str(), arr.len())?;
-            Ok(arr.remove(idx))
-        }
-        _ => Err(PatchError::InvalidPointer),
-    }
-}
-
-fn replace(doc: &mut Value, path: &str, value: Value) -> Result<Value, PatchError> {
-    let target = doc.pointer_mut(path).ok_or(PatchError::InvalidPointer)?;
+fn replace<S: AsRef<str>>(
+    doc: &mut Value,
+    path: &JsonPointer<S>,
+    value: Value,
+) -> Result<Value, PatchError> {
+    let target = path.get_mut(doc).ok_or(PatchError::InvalidPointer)?;
     Ok(mem::replace(target, value))
 }
 
-fn mov(
+fn mov<S0: AsRef<str>, S1: AsRef<str>>(
     doc: &mut Value,
-    from: &str,
-    path: &str,
+    from: &JsonPointer<S0>,
+    path: &JsonPointer<S1>,
     allow_last: bool,
 ) -> Result<Option<Value>, PatchError> {
+    if path == from {
+        return Ok(None);
+    }
     // Check we are not moving inside own child
-    if path.starts_with(from) && path[from.len()..].starts_with('/') {
+    if path.starts_with(from) || from.is_empty() {
         return Err(PatchError::InvalidPointer);
     }
     let val = remove(doc, from, allow_last)?;
     add(doc, path, val)
 }
 
-fn copy(doc: &mut Value, from: &str, path: &str) -> Result<Option<Value>, PatchError> {
-    let source = doc.pointer(from).ok_or(PatchError::InvalidPointer)?.clone();
+fn copy<S0: AsRef<str>, S1: AsRef<str>>(
+    doc: &mut Value,
+    from: &JsonPointer<S0>,
+    path: &JsonPointer<S1>,
+) -> Result<Option<Value>, PatchError> {
+    let source = from.get(doc).ok_or(PatchError::InvalidPointer)?.clone();
     add(doc, path, source)
 }
 
-fn test(doc: &Value, path: &str, expected: &Value) -> Result<(), PatchError> {
-    let target = doc.pointer(path).ok_or(PatchError::InvalidPointer)?;
+fn test<S: AsRef<str>>(
+    doc: &Value,
+    path: &JsonPointer<S>,
+    expected: &Value,
+) -> Result<(), PatchError> {
+    let target = path.get(doc).ok_or(PatchError::InvalidPointer)?;
     if *target == *expected {
         Ok(())
     } else {
@@ -388,51 +355,51 @@ fn apply_patches(doc: &mut Value, patches: &[PatchOperation]) -> Result<(), Patc
 
     match *patch {
         PatchOperation::Add(ref op) => {
-            let prev = add(doc, op.path.as_str(), op.value.clone())?;
+            let prev = add(doc, &op.path, op.value.clone())?;
             apply_patches(doc, tail).map_err(move |e| {
                 match prev {
-                    None => remove(doc, op.path.as_str(), true).unwrap(),
-                    Some(v) => add(doc, op.path.as_str(), v).unwrap().unwrap(),
+                    None => remove(doc, &op.path, true).unwrap(),
+                    Some(v) => add(doc, &op.path, v).unwrap().unwrap(),
                 };
                 e
             })
         }
         PatchOperation::Remove(ref op) => {
-            let prev = remove(doc, op.path.as_str(), false)?;
+            let prev = remove(doc, &op.path, false)?;
             apply_patches(doc, tail).map_err(move |e| {
-                assert!(add(doc, op.path.as_str(), prev).unwrap().is_none());
+                assert!(add(doc, &op.path, prev).unwrap().is_none());
                 e
             })
         }
         PatchOperation::Replace(ref op) => {
-            let prev = replace(doc, op.path.as_str(), op.value.clone())?;
+            let prev = replace(doc, &op.path, op.value.clone())?;
             apply_patches(doc, tail).map_err(move |e| {
-                replace(doc, op.path.as_str(), prev).unwrap();
+                replace(doc, &op.path, prev).unwrap();
                 e
             })
         }
         PatchOperation::Move(ref op) => {
-            let prev = mov(doc, op.from.as_str(), op.path.as_str(), false)?;
+            let prev = mov(doc, &op.from, &op.path, false)?;
             apply_patches(doc, tail).map_err(move |e| {
-                mov(doc, op.path.as_str(), op.from.as_str(), true).unwrap();
+                mov(doc, &op.path, &op.from, true).unwrap();
                 if let Some(prev) = prev {
-                    assert!(add(doc, op.path.as_str(), prev).unwrap().is_none());
+                    assert!(add(doc, &op.path, prev).unwrap().is_none());
                 }
                 e
             })
         }
         PatchOperation::Copy(ref op) => {
-            let prev = copy(doc, op.from.as_str(), op.path.as_str())?;
+            let prev = copy(doc, &op.from, &op.path)?;
             apply_patches(doc, tail).map_err(move |e| {
                 match prev {
-                    None => remove(doc, op.path.as_str(), true).unwrap(),
-                    Some(v) => add(doc, op.path.as_str(), v).unwrap().unwrap(),
+                    None => remove(doc, &op.path, true).unwrap(),
+                    Some(v) => add(doc, &op.path, v).unwrap().unwrap(),
                 };
                 e
             })
         }
         PatchOperation::Test(ref op) => {
-            test(doc, op.path.as_str(), &op.value)?;
+            test(doc, &op.path, &op.value)?;
             apply_patches(doc, tail)
         }
     }
@@ -445,22 +412,22 @@ pub fn patch_unsafe(doc: &mut Value, patch: &Patch) -> Result<(), PatchError> {
     for op in &patch.0 {
         match *op {
             PatchOperation::Add(ref op) => {
-                add(doc, op.path.as_str(), op.value.clone())?;
+                add(doc, &op.path, op.value.clone())?;
             }
             PatchOperation::Remove(ref op) => {
-                remove(doc, op.path.as_str(), false)?;
+                remove(doc, &op.path, false)?;
             }
             PatchOperation::Replace(ref op) => {
-                replace(doc, op.path.as_str(), op.value.clone())?;
+                replace(doc, &op.path, op.value.clone())?;
             }
             PatchOperation::Move(ref op) => {
-                mov(doc, op.from.as_str(), op.path.as_str(), false)?;
+                mov(doc, &op.from, &op.path, false)?;
             }
             PatchOperation::Copy(ref op) => {
-                copy(doc, op.from.as_str(), op.path.as_str())?;
+                copy(doc, &op.from, &op.path)?;
             }
             PatchOperation::Test(ref op) => {
-                test(doc, op.path.as_str(), &op.value)?;
+                test(doc, &op.path, &op.value)?;
             }
         };
     }
