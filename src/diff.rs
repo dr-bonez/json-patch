@@ -2,7 +2,7 @@ use json_ptr::JsonPointer;
 use serde_json::Value;
 
 struct PatchDiffer {
-    path: JsonPointer<String>,
+    path: JsonPointer,
     patch: super::Patch,
     shift: usize,
 }

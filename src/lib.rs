@@ -86,7 +86,7 @@
 #[cfg_attr(test, macro_use)]
 extern crate serde_json;
 
-use json_ptr::JsonPointer;
+use json_ptr::{JsonPointer, SegList};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::error::Error;
@@ -95,6 +95,74 @@ use std::{fmt, mem};
 /// Representation of JSON Patch (list of patch operations)
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Patch(pub Vec<PatchOperation>);
+impl Patch {
+    /// Prepend a path to a patch.
+    /// This is useful if you run a diff on a JSON document that is a small member of a larger document
+    pub fn prepend<S: AsRef<str>, V: SegList>(&mut self, ptr: &JsonPointer<S, V>) {
+        for op in self.0.iter_mut() {
+            match op {
+                PatchOperation::Add(ref mut op) => {
+                    op.path.prepend(ptr);
+                }
+                PatchOperation::Remove(ref mut op) => {
+                    op.path.prepend(ptr);
+                }
+                PatchOperation::Replace(ref mut op) => {
+                    op.path.prepend(ptr);
+                }
+                PatchOperation::Move(ref mut op) => {
+                    op.path.prepend(ptr);
+                    op.from.prepend(ptr);
+                }
+                PatchOperation::Copy(ref mut op) => {
+                    op.path.prepend(ptr);
+                    op.from.prepend(ptr);
+                }
+                PatchOperation::Test(ref mut op) => {
+                    op.path.prepend(ptr);
+                }
+            }
+        }
+    }
+    /// Checks whether or not the data at a path could be affected by a patch
+    pub fn affects_path<S: AsRef<str>, V: SegList>(&self, ptr: &JsonPointer<S, V>) -> bool {
+        for op in self.0.iter() {
+            match op {
+                PatchOperation::Add(ref op) => {
+                    if op.path.starts_with(ptr) || ptr.starts_with(&op.path) {
+                        return true;
+                    }
+                }
+                PatchOperation::Remove(ref op) => {
+                    if op.path.starts_with(ptr) || ptr.starts_with(&op.path) {
+                        return true;
+                    }
+                }
+                PatchOperation::Replace(ref op) => {
+                    if op.path.starts_with(ptr) || ptr.starts_with(&op.path) {
+                        return true;
+                    }
+                }
+                PatchOperation::Move(ref op) => {
+                    if op.path.starts_with(ptr)
+                        || ptr.starts_with(&op.path)
+                        || op.from.starts_with(ptr)
+                        || ptr.starts_with(&op.from)
+                    {
+                        return true;
+                    }
+                }
+                PatchOperation::Copy(ref op) => {
+                    if op.path.starts_with(ptr) || ptr.starts_with(&op.path) {
+                        return true;
+                    }
+                }
+                PatchOperation::Test(_) => {}
+            }
+        }
+        false
+    }
+}
 
 /// JSON Patch 'add' operation representation
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -196,9 +264,9 @@ impl fmt::Display for PatchError {
     }
 }
 
-fn add<S: AsRef<str>>(
+fn add<S: AsRef<str>, V: SegList>(
     doc: &mut Value,
-    path: &JsonPointer<S>,
+    path: &JsonPointer<S, V>,
     value: Value,
 ) -> Result<Option<Value>, PatchError> {
     dbg!(path.iter().collect::<Vec<_>>());
@@ -206,18 +274,18 @@ fn add<S: AsRef<str>>(
         .map_err(|_| PatchError::InvalidPointer)
 }
 
-fn remove<S: AsRef<str>>(
+fn remove<S: AsRef<str>, V: SegList>(
     doc: &mut Value,
-    path: &JsonPointer<S>,
+    path: &JsonPointer<S, V>,
     allow_last: bool,
 ) -> Result<Value, PatchError> {
     path.remove(doc, allow_last)
         .ok_or(PatchError::InvalidPointer)
 }
 
-fn replace<S: AsRef<str>>(
+fn replace<S: AsRef<str>, V: SegList>(
     doc: &mut Value,
-    path: &JsonPointer<S>,
+    path: &JsonPointer<S, V>,
     value: Value,
 ) -> Result<Value, PatchError> {
     let target = path.get_mut(doc).ok_or(PatchError::InvalidPointer)?;
@@ -250,9 +318,9 @@ fn copy<S0: AsRef<str>, S1: AsRef<str>>(
     add(doc, path, source)
 }
 
-fn test<S: AsRef<str>>(
+fn test<S: AsRef<str>, V: SegList>(
     doc: &Value,
-    path: &JsonPointer<S>,
+    path: &JsonPointer<S, V>,
     expected: &Value,
 ) -> Result<(), PatchError> {
     let target = path.get(doc).ok_or(PatchError::InvalidPointer)?;
