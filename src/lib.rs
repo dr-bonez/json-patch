@@ -269,7 +269,6 @@ fn add<S: AsRef<str>, V: SegList>(
     path: &JsonPointer<S, V>,
     value: Value,
 ) -> Result<Option<Value>, PatchError> {
-    dbg!(path.iter().collect::<Vec<_>>());
     path.insert(doc, value, false)
         .map_err(|_| PatchError::InvalidPointer)
 }
@@ -288,8 +287,11 @@ fn replace<S: AsRef<str>, V: SegList>(
     path: &JsonPointer<S, V>,
     value: Value,
 ) -> Result<Value, PatchError> {
-    let target = path.get_mut(doc).ok_or(PatchError::InvalidPointer)?;
-    Ok(mem::replace(target, value))
+    if let Some(target) = path.get_mut(doc) {
+        Ok(mem::replace(target, value))
+    } else {
+        Ok(add(doc, path, value)?.unwrap_or_default())
+    }
 }
 
 fn mov<S0: AsRef<str>, S1: AsRef<str>>(
