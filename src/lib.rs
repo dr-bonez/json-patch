@@ -411,68 +411,89 @@ pub fn from_value(value: Value) -> Result<Patch, serde_json::Error> {
 ///
 /// # }
 /// ```
-pub fn patch(doc: &mut Value, patch: &Patch) -> Result<(), PatchError> {
-    apply_patches(doc, &patch.0)
+pub fn patch<'a>(doc: &mut Value, patch: &'a Patch) -> Result<Undo<'a>, PatchError> {
+    let mut undo = Undo(Vec::with_capacity(patch.0.len()));
+    apply_patches(doc, &patch.0, &mut undo).map(|_| undo)
+}
+
+/// Object that can be used to undo a patch if successful
+pub struct Undo<'a>(Vec<Box<dyn FnOnce(&mut Value) + Send + Sync + 'a>>);
+impl<'a> Undo<'a> {
+    /// Apply the undo to the document
+    pub fn apply(mut self, doc: &mut Value) {
+        while let Some(undo) = self.0.pop() {
+            undo(doc)
+        }
+    }
 }
 
 // Apply patches while tracking all the changes being made so they can be reverted back in case
-// subsequent patches fail. Uses stack recursion to keep the state.
-fn apply_patches(doc: &mut Value, patches: &[PatchOperation]) -> Result<(), PatchError> {
+// subsequent patches fail. Uses heap allocated closures to keep the state.
+fn apply_patches<'a>(
+    doc: &mut Value,
+    patches: &'a [PatchOperation],
+    undo: &mut Undo<'a>,
+) -> Result<(), PatchError> {
     let (patch, tail) = match patches.split_first() {
         None => return Ok(()),
         Some((patch, tail)) => (patch, tail),
     };
 
-    match *patch {
+    let res = match *patch {
         PatchOperation::Add(ref op) => {
             let prev = add(doc, &op.path, op.value.clone())?;
-            apply_patches(doc, tail).map_err(move |e| {
+            undo.0.push(Box::new(move |doc| {
                 match prev {
                     None => remove(doc, &op.path, true).unwrap(),
                     Some(v) => add(doc, &op.path, v).unwrap().unwrap(),
                 };
-                e
-            })
+            }));
+            apply_patches(doc, tail, undo)
         }
         PatchOperation::Remove(ref op) => {
             let prev = remove(doc, &op.path, false)?;
-            apply_patches(doc, tail).map_err(move |e| {
+            undo.0.push(Box::new(move |doc| {
                 assert!(add(doc, &op.path, prev).unwrap().is_none());
-                e
-            })
+            }));
+            apply_patches(doc, tail, undo)
         }
         PatchOperation::Replace(ref op) => {
             let prev = replace(doc, &op.path, op.value.clone())?;
-            apply_patches(doc, tail).map_err(move |e| {
+            undo.0.push(Box::new(move |doc| {
                 replace(doc, &op.path, prev).unwrap();
-                e
-            })
+            }));
+            apply_patches(doc, tail, undo)
         }
         PatchOperation::Move(ref op) => {
             let prev = mov(doc, &op.from, &op.path, false)?;
-            apply_patches(doc, tail).map_err(move |e| {
+            undo.0.push(Box::new(move |doc| {
                 mov(doc, &op.path, &op.from, true).unwrap();
                 if let Some(prev) = prev {
                     assert!(add(doc, &op.path, prev).unwrap().is_none());
                 }
-                e
-            })
+            }));
+            apply_patches(doc, tail, undo)
         }
         PatchOperation::Copy(ref op) => {
             let prev = copy(doc, &op.from, &op.path)?;
-            apply_patches(doc, tail).map_err(move |e| {
+            undo.0.push(Box::new(move |doc| {
                 match prev {
                     None => remove(doc, &op.path, true).unwrap(),
                     Some(v) => add(doc, &op.path, v).unwrap().unwrap(),
                 };
-                e
-            })
+            }));
+            apply_patches(doc, tail, undo)
         }
         PatchOperation::Test(ref op) => {
             test(doc, &op.path, &op.value)?;
-            apply_patches(doc, tail)
+            undo.0.push(Box::new(move |_| ()));
+            apply_patches(doc, tail, undo)
         }
+    };
+    if res.is_err() {
+        undo.0.pop().unwrap()(doc);
     }
+    res
 }
 
 /// Patch provided JSON document (given as `serde_json::Value`) in place.
