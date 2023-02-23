@@ -16,9 +16,11 @@ nightly = []
 diff = ["treediff"]
 
 [dependencies]
+imbl-value = { git = "https://github.com/Start9Labs/imbl-value", features = [
+    "treediff",
+] }
 json-ptr = { path = "../json-ptr" }
-serde = { version = "1.0.118", features = ["derive"] }
-serde_json = "1.0.60"
+serde = { version = "1", features = ["derive"] }
 
 [dependencies.treediff]
 version = "4.0.0"

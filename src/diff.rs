@@ -1,5 +1,5 @@
+use imbl_value::Value;
 use json_ptr::JsonPointer;
-use serde_json::Value;
 
 struct PatchDiffer {
     path: JsonPointer,
@@ -17,11 +17,11 @@ impl PatchDiffer {
     }
 }
 
-impl<'a> treediff::Delegate<'a, treediff::value::Key, Value> for PatchDiffer {
-    fn push(&mut self, key: &treediff::value::Key) {
+impl<'a> treediff::Delegate<'a, imbl_value::treediff::Key, Value> for PatchDiffer {
+    fn push(&mut self, key: &imbl_value::treediff::Key) {
         match *key {
-            treediff::value::Key::Index(idx) => self.path.push_end_idx(idx - self.shift),
-            treediff::value::Key::String(ref key) => self.path.push_end(key),
+            imbl_value::treediff::Key::Index(idx) => self.path.push_end_idx(idx - self.shift),
+            imbl_value::treediff::Key::String(ref key) => self.path.push_end(key),
         }
     }
 
@@ -30,7 +30,7 @@ impl<'a> treediff::Delegate<'a, treediff::value::Key, Value> for PatchDiffer {
         self.shift = 0;
     }
 
-    fn removed<'b>(&mut self, k: &'b treediff::value::Key, _v: &'a Value) {
+    fn removed<'b>(&mut self, k: &'b imbl_value::treediff::Key, _v: &'a Value) {
         let len = self.path.len();
         self.push(k);
         self.patch
@@ -39,13 +39,13 @@ impl<'a> treediff::Delegate<'a, treediff::value::Key, Value> for PatchDiffer {
                 path: self.path.clone(),
             }));
         // Shift indices, we are deleting array elements
-        if let treediff::value::Key::Index(_) = k {
+        if let imbl_value::treediff::Key::Index(_) = k {
             self.shift += 1;
         }
         self.path.truncate(len);
     }
 
-    fn added(&mut self, k: &treediff::value::Key, v: &Value) {
+    fn added(&mut self, k: &imbl_value::treediff::Key, v: &Value) {
         let len = self.path.len();
         self.push(k);
         self.patch

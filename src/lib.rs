@@ -84,11 +84,11 @@
 #![deny(warnings)]
 #![warn(missing_docs)]
 #[cfg_attr(test, macro_use)]
-extern crate serde_json;
+extern crate imbl_value;
 
+use imbl_value::{InOMap as Map, Value};
 use json_ptr::{JsonPointer, SegList};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 use std::error::Error;
 use std::{fmt, mem};
 
@@ -372,8 +372,8 @@ fn test<S: AsRef<str>, V: SegList>(
 /// let patch: Patch = from_str(patch_str).unwrap();
 /// # }
 /// ```
-pub fn from_value(value: Value) -> Result<Patch, serde_json::Error> {
-    let patch = serde_json::from_value::<Vec<PatchOperation>>(value)?;
+pub fn from_value(value: Value) -> Result<Patch, imbl_value::Error> {
+    let patch = imbl_value::from_value::<Vec<PatchOperation>>(value)?;
     Ok(Patch(patch))
 }
 
@@ -584,7 +584,7 @@ pub fn merge(doc: &mut Value, patch: &Value) {
         if value.is_null() {
             map.remove(key.as_str());
         } else {
-            merge(map.entry(key.as_str()).or_insert(Value::Null), value);
+            merge(map.entry(key.clone()).or_insert(Value::Null), value);
         }
     }
 }
