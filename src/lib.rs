@@ -14,7 +14,7 @@
 //!
 //! ```rust
 //! #[macro_use]
-//! extern crate serde_json;
+//! extern crate imbl_value;
 //! extern crate json_patch;
 //!
 //! use json_patch::patch;
@@ -44,7 +44,7 @@
 //!
 //! ```rust
 //! #[macro_use]
-//! extern crate serde_json;
+//! extern crate imbl_value;
 //! extern crate json_patch;
 //!
 //! use json_patch::merge;
@@ -336,11 +336,11 @@ fn test<S: AsRef<str>, V: SegList>(
 /// Create JSON Patch from JSON Value
 /// # Examples
 ///
-/// Create patch from `serde_json::Value`:
+/// Create patch from `imbl_value::Value`:
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate serde_json;
+/// extern crate imbl_value;
 /// extern crate json_patch;
 ///
 /// use json_patch::{Patch, from_value};
@@ -377,7 +377,7 @@ pub fn from_value(value: Value) -> Result<Patch, imbl_value::Error> {
     Ok(Patch(patch))
 }
 
-/// Patch provided JSON document (given as `serde_json::Value`) in-place. If any of the patch is
+/// Patch provided JSON document (given as `imbl_value::Value`) in-place. If any of the patch is
 /// failed, all previous operations are reverted. In case of internal error resulting in panic,
 /// document might be left in inconsistent state.
 ///
@@ -386,7 +386,7 @@ pub fn from_value(value: Value) -> Result<Patch, imbl_value::Error> {
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate serde_json;
+/// extern crate imbl_value;
 /// extern crate json_patch;
 ///
 /// use json_patch::patch;
@@ -496,7 +496,7 @@ fn apply_patches<'a>(
     res
 }
 
-/// Patch provided JSON document (given as `serde_json::Value`) in place.
+/// Patch provided JSON document (given as `imbl_value::Value`) in place.
 /// Operations are applied in unsafe manner. If any of the operations fails, all previous
 /// operations are not reverted.
 pub fn patch_unsafe(doc: &mut Value, patch: &Patch) -> Result<(), PatchError> {
@@ -525,7 +525,7 @@ pub fn patch_unsafe(doc: &mut Value, patch: &Patch) -> Result<(), PatchError> {
     Ok(())
 }
 
-/// Patch provided JSON document (given as `serde_json::Value`) in place with JSON Merge Patch
+/// Patch provided JSON document (given as `imbl_value::Value`) in place with JSON Merge Patch
 /// (RFC 7396).
 ///
 /// # Example
@@ -533,7 +533,7 @@ pub fn patch_unsafe(doc: &mut Value, patch: &Patch) -> Result<(), PatchError> {
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate serde_json;
+/// extern crate imbl_value;
 /// extern crate json_patch;
 ///
 /// use json_patch::merge;
@@ -582,7 +582,7 @@ pub fn merge(doc: &mut Value, patch: &Value) {
     let map = doc.as_object_mut().unwrap();
     for (key, value) in patch.as_object().unwrap() {
         if value.is_null() {
-            map.remove(key.as_str());
+            map.remove(&*key);
         } else {
             merge(map.entry(key.clone()).or_insert(Value::Null), value);
         }

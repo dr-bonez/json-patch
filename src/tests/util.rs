@@ -1,5 +1,5 @@
+use imbl_value::Value;
 use serde::Deserialize;
-use serde_json::Value;
 use std::fmt::Write;
 use std::{fs, io};
 
@@ -22,7 +22,7 @@ fn run_case(doc: &Value, patches: &Value, merge_patch: bool) -> Result<Value, St
         crate::merge(&mut actual, &patches);
     } else {
         let patches: crate::Patch =
-            serde_json::from_value(patches.clone()).map_err(|e| e.to_string())?;
+            imbl_value::from_value(patches.clone()).map_err(|e| e.to_string())?;
 
         // Patch and verify that in case of error document wasn't changed
         crate::patch(&mut actual, &patches)
@@ -41,7 +41,7 @@ fn run_case(doc: &Value, patches: &Value, merge_patch: bool) -> Result<Value, St
 fn run_case_patch_unsafe(doc: &Value, patches: &Value) -> Result<Value, String> {
     let mut actual = doc.clone();
     let patches: crate::Patch =
-        serde_json::from_value(patches.clone()).map_err(|e| e.to_string())?;
+        imbl_value::from_value(patches.clone()).map_err(|e| e.to_string())?;
     crate::patch_unsafe(&mut actual, &patches).map_err(|e| e.to_string())?;
     Ok(actual)
 }

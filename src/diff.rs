@@ -74,7 +74,7 @@ impl<'a> treediff::Delegate<'a, imbl_value::treediff::Key, Value> for PatchDiffe
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate serde_json;
+/// extern crate imbl_value;
 /// extern crate json_patch;
 ///
 /// use json_patch::{patch, diff, from_value};
@@ -122,7 +122,7 @@ pub fn diff(left: &Value, right: &Value) -> super::Patch {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::Value;
+    use imbl_value::Value;
 
     #[test]
     pub fn replace_all() {
@@ -130,7 +130,7 @@ mod tests {
         let p = super::diff(&left, &Value::Null);
         assert_eq!(
             p,
-            serde_json::from_value(json!([
+            imbl_value::from_value(json!([
                 { "op": "replace", "path": "", "value": null },
             ]))
             .unwrap()
@@ -143,7 +143,7 @@ mod tests {
         let p = super::diff(&Value::Null, &right);
         assert_eq!(
             p,
-            serde_json::from_value(json!([
+            imbl_value::from_value(json!([
                 { "op": "replace", "path": "", "value": { "title": "Hello!" } },
             ]))
             .unwrap()
@@ -157,7 +157,7 @@ mod tests {
         let p = super::diff(&left, &right);
         assert_eq!(
             p,
-            serde_json::from_value(json!([
+            imbl_value::from_value(json!([
                 { "op": "remove", "path": "/0" },
                 { "op": "remove", "path": "/0" },
             ]))
@@ -172,7 +172,7 @@ mod tests {
         let p = super::diff(&left, &right);
         assert_eq!(
             p,
-            serde_json::from_value(json!([
+            imbl_value::from_value(json!([
                 { "op": "remove", "path": "/1" },
                 { "op": "remove", "path": "/1" },
             ]))
@@ -186,7 +186,7 @@ mod tests {
         let p = super::diff(&left, &right);
         assert_eq!(
             p,
-            serde_json::from_value(json!([
+            imbl_value::from_value(json!([
                 { "op": "add", "path": "/hello", "value": "bye" },
                 { "op": "remove", "path": "/0" },
                 { "op": "remove", "path": "/0" },

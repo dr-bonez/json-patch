@@ -18,7 +18,7 @@ fn parse_from_value() {
         Patch(vec![
             Add(AddOperation {
                 path: "/a/b".parse().unwrap(),
-                value: Value::from(1),
+                value: json!(1),
             }),
             Remove(RemoveOperation {
                 path: "/c".parse().unwrap(),
@@ -44,7 +44,7 @@ fn parse_from_string() {
         Patch(vec![
             Add(AddOperation {
                 path: "/a/b".parse().unwrap(),
-                value: Value::from(1),
+                value: json!(1),
             }),
             Remove(RemoveOperation {
                 path: "/c".parse().unwrap()
