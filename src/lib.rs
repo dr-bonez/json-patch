@@ -417,6 +417,7 @@ pub fn patch<'a>(doc: &mut Value, patch: &'a Patch) -> Result<Undo<'a>, PatchErr
 }
 
 /// Object that can be used to undo a patch if successful
+#[allow(clippy::type_complexity)]
 pub struct Undo<'a>(Vec<Box<dyn FnOnce(&mut Value) + Send + Sync + 'a>>);
 impl<'a> Undo<'a> {
     /// Apply the undo to the document

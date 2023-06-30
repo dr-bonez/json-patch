@@ -19,7 +19,7 @@ struct TestCase {
 fn run_case(doc: &Value, patches: &Value, merge_patch: bool) -> Result<Value, String> {
     let mut actual = doc.clone();
     if merge_patch {
-        crate::merge(&mut actual, &patches);
+        crate::merge(&mut actual, patches);
     } else {
         let patches: crate::Patch =
             serde_json::from_value(patches.clone()).map_err(|e| e.to_string())?;
