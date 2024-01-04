@@ -1,5 +1,5 @@
-#![feature(test)]
 #![cfg(feature = "nightly")]
+#![feature(test)]
 extern crate json_patch;
 extern crate rand;
 extern crate serde_json;
