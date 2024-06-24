@@ -162,6 +162,10 @@ impl Patch {
         }
         false
     }
+    /// Returns whether the patch is empty
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 /// JSON Patch 'add' operation representation
