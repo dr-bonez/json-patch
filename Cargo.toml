@@ -16,15 +16,15 @@ nightly = []
 diff = ["treediff"]
 
 [dependencies]
-imbl-value = { version = "0.1.2", features = ["treediff"] }
+imbl-value = { version = "0.2.0", features = ["treediff"] }
 json-ptr = { path = "../json-ptr" }
 serde = { version = "1", features = ["derive"] }
 
 [dependencies.treediff]
-version = "4.0.0"
+version = "5.0.0"
 features = ["with-serde-json"]
 optional = true
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.9.1"
 serde_json = { version = "1.0.60", features = ["preserve_order"] }
