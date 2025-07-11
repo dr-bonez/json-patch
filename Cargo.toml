@@ -13,17 +13,12 @@ edition = "2018"
 [features]
 default = ["diff"]
 nightly = []
-diff = ["treediff"]
+diff = []
 
 [dependencies]
-imbl-value = { version = "0.2.0", features = ["treediff"] }
+imbl-value = "0.3.0"
 json-ptr = { path = "../json-ptr" }
 serde = { version = "1", features = ["derive"] }
-
-[dependencies.treediff]
-version = "5.0.0"
-features = ["with-serde-json"]
-optional = true
 
 [dev-dependencies]
 rand = "0.9.1"

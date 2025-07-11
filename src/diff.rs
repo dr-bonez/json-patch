@@ -1,69 +1,21 @@
+use std::collections::BTreeSet;
+
 use imbl_value::Value;
 use json_ptr::JsonPointer;
+
+use crate::{AddOperation, PatchOperation, RemoveOperation, ReplaceOperation};
 
 struct PatchDiffer {
     path: JsonPointer,
     patch: super::Patch,
-    shift: usize,
 }
 
 impl PatchDiffer {
     fn new() -> Self {
         Self {
-            path: "".parse().unwrap(),
+            path: JsonPointer::default(),
             patch: super::Patch(Vec::new()),
-            shift: 0,
         }
-    }
-}
-
-impl<'a> treediff::Delegate<'a, imbl_value::treediff::Key, Value> for PatchDiffer {
-    fn push(&mut self, key: &imbl_value::treediff::Key) {
-        match *key {
-            imbl_value::treediff::Key::Index(idx) => self.path.push_end_idx(idx - self.shift),
-            imbl_value::treediff::Key::String(ref key) => self.path.push_end(key),
-        }
-    }
-
-    fn pop(&mut self) {
-        self.path.pop_end();
-        self.shift = 0;
-    }
-
-    fn removed<'b>(&mut self, k: &'b imbl_value::treediff::Key, _v: &'a Value) {
-        let len = self.path.len();
-        self.push(k);
-        self.patch
-            .0
-            .push(super::PatchOperation::Remove(super::RemoveOperation {
-                path: self.path.clone(),
-            }));
-        // Shift indices, we are deleting array elements
-        if let imbl_value::treediff::Key::Index(_) = k {
-            self.shift += 1;
-        }
-        self.path.truncate(len);
-    }
-
-    fn added(&mut self, k: &imbl_value::treediff::Key, v: &Value) {
-        let len = self.path.len();
-        self.push(k);
-        self.patch
-            .0
-            .push(super::PatchOperation::Add(super::AddOperation {
-                path: self.path.clone(),
-                value: v.clone(),
-            }));
-        self.path.truncate(len);
-    }
-
-    fn modified(&mut self, _old: &'a Value, new: &'a Value) {
-        self.patch
-            .0
-            .push(super::PatchOperation::Replace(super::ReplaceOperation {
-                path: self.path.clone(),
-                value: new.clone(),
-            }));
     }
 }
 
@@ -114,10 +66,118 @@ impl<'a> treediff::Delegate<'a, imbl_value::treediff::Key, Value> for PatchDiffe
 ///
 /// # }
 /// ```
-pub fn diff(left: &Value, right: &Value) -> super::Patch {
+pub fn diff(from: &Value, to: &Value) -> super::Patch {
     let mut differ = PatchDiffer::new();
-    treediff::diff(left, right, &mut differ);
+    diff_mut(&mut differ, from, to);
     differ.patch
+}
+
+fn diff_mut(differ: &mut PatchDiffer, from: &Value, to: &Value) {
+    match (from, to) {
+        (Value::Object(f), Value::Object(t)) if !f.ptr_eq(t) => {
+            for key in f
+                .keys()
+                .chain(t.keys())
+                .map(|k| &**k)
+                .collect::<BTreeSet<_>>()
+            {
+                differ.path.push_end(key);
+                match (f.get(key), to.get(key)) {
+                    (Some(f), Some(t)) if f != t => {
+                        diff_mut(differ, f, t);
+                    }
+                    (Some(_), None) => {
+                        differ.patch.0.push(PatchOperation::Remove(RemoveOperation {
+                            path: differ.path.clone(),
+                        }));
+                    }
+                    (None, Some(t)) => {
+                        differ.patch.0.push(PatchOperation::Add(AddOperation {
+                            path: differ.path.clone(),
+                            value: t.clone(),
+                        }));
+                    }
+                    _ => (),
+                }
+                differ.path.pop_end();
+            }
+        }
+        (Value::Array(f), Value::Array(t)) if !f.ptr_eq(t) => {
+            if f.len() < t.len() {
+                let mut f_idx = 0;
+                let mut t_idx = 0;
+                while t_idx < t.len() {
+                    if f_idx == f.len() {
+                        differ.patch.0.push(PatchOperation::Add(AddOperation {
+                            path: differ.path.clone().join_end_idx(t_idx),
+                            value: t[t_idx].clone(),
+                        }));
+                        t_idx += 1;
+                    } else {
+                        if !f[f_idx].ptr_eq(&t[t_idx]) {
+                            if t.iter().skip(t_idx + 1).any(|t| f[f_idx].ptr_eq(t)) {
+                                differ.patch.0.push(PatchOperation::Add(AddOperation {
+                                    path: differ.path.clone().join_end_idx(t_idx),
+                                    value: t[t_idx].clone(),
+                                }));
+                                t_idx += 1;
+                                continue;
+                            } else {
+                                differ.path.push_end_idx(t_idx);
+                                diff_mut(differ, &f[f_idx], &t[t_idx]);
+                                differ.path.pop_end();
+                            }
+                        }
+                        f_idx += 1;
+                        t_idx += 1;
+                    }
+                }
+            } else if f.len() > t.len() {
+                let mut f_idx = 0;
+                let mut t_idx = 0;
+                while f_idx < f.len() {
+                    if t_idx == t.len() {
+                        differ.patch.0.push(PatchOperation::Remove(RemoveOperation {
+                            path: differ.path.clone().join_end_idx(t_idx),
+                        }));
+                        f_idx += 1;
+                    } else {
+                        if !f[f_idx].ptr_eq(&t[t_idx]) {
+                            if f.iter().skip(f_idx + 1).any(|f| t[t_idx].ptr_eq(f)) {
+                                differ.patch.0.push(PatchOperation::Remove(RemoveOperation {
+                                    path: differ.path.clone().join_end_idx(t_idx),
+                                }));
+                                f_idx += 1;
+                                continue;
+                            } else {
+                                differ.path.push_end_idx(t_idx);
+                                diff_mut(differ, &f[f_idx], &t[t_idx]);
+                                differ.path.pop_end();
+                            }
+                        }
+                        f_idx += 1;
+                        t_idx += 1;
+                    }
+                }
+            } else {
+                for i in 0..f.len() {
+                    if !f[i].ptr_eq(&t[i]) {
+                        differ.path.push_end_idx(i);
+                        diff_mut(differ, &f[i], &t[i]);
+                        differ.path.pop_end();
+                    }
+                }
+            }
+        }
+        (f, t) if f != t => differ
+            .patch
+            .0
+            .push(PatchOperation::Replace(ReplaceOperation {
+                path: differ.path.clone(),
+                value: t.clone(),
+            })),
+        _ => (),
+    }
 }
 
 #[cfg(test)]
@@ -187,9 +247,7 @@ mod tests {
         assert_eq!(
             p,
             imbl_value::from_value(json!([
-                { "op": "add", "path": "/hello", "value": "bye" },
-                { "op": "remove", "path": "/0" },
-                { "op": "remove", "path": "/0" },
+                { "op": "replace", "path": "", "value": &right },
             ]))
             .unwrap()
         );
