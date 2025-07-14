@@ -55,9 +55,9 @@ impl PatchDiffer {
 /// let p = diff(&left, &right);
 /// assert_eq!(p, from_value(json!([
 ///   { "op": "remove", "path": "/author/familyName" },
+///   { "op": "add", "path": "/phoneNumber", "value": "+01-123-456-7890" },
 ///   { "op": "remove", "path": "/tags/1" },
 ///   { "op": "replace", "path": "/title", "value": "Hello!" },
-///   { "op": "add", "path": "/phoneNumber", "value": "+01-123-456-7890" },
 /// ])).unwrap());
 ///
 /// let mut doc = left.clone();
@@ -132,6 +132,12 @@ fn diff_mut(differ: &mut PatchDiffer, from: &Value, to: &Value) {
                         t_idx += 1;
                     }
                 }
+                while f_idx < f.len() {
+                    differ.patch.0.push(PatchOperation::Remove(RemoveOperation {
+                        path: differ.path.clone().join_end_idx(t_idx),
+                    }));
+                    f_idx += 1;
+                }
             } else if f.len() > t.len() {
                 let mut f_idx = 0;
                 let mut t_idx = 0;
@@ -158,6 +164,13 @@ fn diff_mut(differ: &mut PatchDiffer, from: &Value, to: &Value) {
                         f_idx += 1;
                         t_idx += 1;
                     }
+                }
+                while t_idx < t.len() {
+                    differ.patch.0.push(PatchOperation::Add(AddOperation {
+                        path: differ.path.clone().join_end_idx(t_idx),
+                        value: t[t_idx].clone(),
+                    }));
+                    t_idx += 1;
                 }
             } else {
                 for i in 0..f.len() {
@@ -267,5 +280,14 @@ mod tests {
 
         crate::patch(&mut left, &patch).unwrap();
         assert_eq!(left, right);
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn test_diff(mut from: Value, to: Value) {
+            let patch = super::diff(&from, &to);
+            crate::patch(&mut from, &patch).unwrap();
+            assert_eq!(from, to);
+        }
     }
 }

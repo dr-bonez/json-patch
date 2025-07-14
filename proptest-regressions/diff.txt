@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 211cdb8fc291d7dc48ff5e0c0e4bdcd81f93987373468e7de6ab429da83be7da # shrinks to mut from = Array [Number(0), Null, Null, Null, Bool(false), Null, Null], to = Array [Bool(false), Null, Null, Null]
+cc af37f5d4d8854960a45f1737eeef74b9708e388d76972b52d5826ddeb34771aa # shrinks to mut from = Array [Null, Null, Null, Null], to = Array [Null, Bool(false), Bool(false), Null, Null]
