@@ -16,7 +16,7 @@ nightly = []
 diff = []
 
 [dependencies]
-imbl-value = "0.3.2"
+imbl-value = "0.4.0"
 json-ptr = { path = "../json-ptr" }
 serde = { version = "1", features = ["derive"] }
 
