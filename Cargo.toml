@@ -16,7 +16,7 @@ nightly = []
 diff = []
 
 [dependencies]
-imbl-value = "0.4.0"
+imbl-value = "0.4.1"
 json-ptr = { path = "../json-ptr" }
 serde = { version = "1", features = ["derive"] }
 
@@ -24,4 +24,4 @@ serde = { version = "1", features = ["derive"] }
 rand = "0.9.1"
 serde_json = { version = "1.0.60", features = ["preserve_order"] }
 proptest = "1"
-imbl-value = { version = "0.4.0", features = ["arbitrary"] }
+imbl-value = { version = "0.4.1", features = ["arbitrary"] }
